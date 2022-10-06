@@ -202,7 +202,7 @@ public void OnPluginStart()
 	);
 	
 	cv_flAnnotationLifetime = CreateConVar(
-		"sm_objhints_hint_lifetime",
+		"sm_objhints_lifetime_annotation",
 		DEFAULT_HINT_LIFETIME,
 		"The annotation will stay on the player's HUD for THIS many seconds",
 		FCVAR_NONE,
@@ -211,7 +211,7 @@ public void OnPluginStart()
 	);
 	
 	cv_flOutlineLifetime = CreateConVar(
-		"sm_objhints_hint_lifetime",
+		"sm_objhints_lifetime_outline",
 		DEFAULT_HINT_LIFETIME,
 		"The player will see the outline around the building for THIS many seconds",
 		FCVAR_NONE,
