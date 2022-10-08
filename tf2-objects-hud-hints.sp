@@ -296,13 +296,14 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	}
 	
 	bool goodPrefix =
-		   arg[1] == 'h'
-		&& arg[2] == 'i'
-		&& arg[3] == 'n'
-		&& arg[4] == 't';
+		   (arg[1] == 'h' || arg[1] == 'H')
+		&& (arg[2] == 'i' || arg[2] == 'I')
+		&& (arg[3] == 'n' || arg[3] == 'N')
+		&& (arg[4] == 't' || arg[4] == 'T');
 	
 	bool goodString = goodPrefix
-		&& (!arg[5] || arg[5] == ' ' || (arg[5] == 's' && (!arg[6] || arg[6] == ' ')));
+		&& (!arg[5] || arg[5] == ' '
+		|| ((arg[5] == 's' || arg[5] == 'S') && (!arg[6] || arg[6] == ' ')));
 	
 	if (!goodString)
 		return Plugin_Continue;	
