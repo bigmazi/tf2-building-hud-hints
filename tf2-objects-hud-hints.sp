@@ -3,13 +3,14 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <clientprefs>
 
 public Plugin myinfo =
 {
 	name        = "[TF2] HUD hints for buildings",
 	author      = "bigmazi",
 	description = "Shows an appropriate HUD hint for nearby buildings to players who use specific voice commands",
-	version     = "1.1",
+	version     = "1.2",
 	url         = "https://steamcommunity.com/id/bmazi/"
 };
 
@@ -42,7 +43,7 @@ enum TFTeam
 
 #define SFX_NULL "vo/null.mp3"
 
-#define HINT_OFFSET_Z 70.0
+#define ANNOTATION_OFFSET_Z 70.0
 
 #define DEFAULT_SEEK_RADIUS "1920.0"
 
@@ -106,6 +107,9 @@ enum Color
 // *** Global data ***
 // ----------------------------------------------------------------------------
 
+Handle cookie_bEnabled;
+bool g_enabledForClient[MAXPLAYERS + 1] = {true, ...};
+
 ConVar cv_nHintMethod;
 
 ConVar cv_nReactToMedicCallMode;
@@ -135,6 +139,16 @@ int off_CTFGlow_m_hOwnerEntity;
 public void OnPluginStart()
 {
 	off_CTFGlow_m_hOwnerEntity = FindSendPropInfo("CTFGlow", "m_hOwnerEntity");
+	
+	cookie_bEnabled = RegClientCookie("cookie_objhints", "Toggles building HUD hints", CookieAccess_Protected);
+	
+	for (int client = 1; client <= MaxClients; ++client)
+	{
+		if (IsClientInGame(client) && AreClientCookiesCached(client))
+		{
+			OnClientCookiesCached(client);
+		}
+	}
 
 	for (int client = 1; client < sizeof(g_outlineRef); ++client)
 	{
@@ -245,6 +259,91 @@ public void OnMapStart()
 		g_canSeekBuildingTime[client] = 0.0;
 }
 
+public void OnClientCookiesCached(int client)
+{
+	char buf[2];
+	GetClientCookie(client, cookie_bEnabled, buf, sizeof(buf));
+	
+	// Will default to 1 if it's the first time the client connects
+	bool value = buf[0] != '0';
+	
+	g_enabledForClient[client] = value;
+}
+
+public void OnClientDisconnect(int client)
+{
+	if (!AreClientCookiesCached(client))
+		return;
+	
+	char value[2];
+	value[0] = view_as<char>(g_enabledForClient[client]) + '0';
+	value[1] = '\0';
+	
+	SetClientCookie(client, cookie_bEnabled, value);
+}
+
+public Action OnClientSayCommand(int client, const char[] command, const char[] arg)
+{	
+	Action res;
+	
+	switch (arg[0])
+	{
+		case '/': res = Plugin_Stop;
+		case '!': res = Plugin_Continue;
+		
+		default:
+			return Plugin_Continue;
+	}
+	
+	bool goodPrefix =
+		   arg[1] == 'h'
+		&& arg[2] == 'i'
+		&& arg[3] == 'n'
+		&& arg[4] == 't';
+	
+	bool goodString = goodPrefix
+		&& (!arg[5] || arg[5] == ' ' || (arg[5] == 's' && (!arg[6] || arg[6] == ' ')));
+	
+	if (!goodString)
+		return Plugin_Continue;	
+	
+	if (AreClientCookiesCached(client))
+	{		
+		g_enabledForClient[client] = !g_enabledForClient[client];
+		
+		int id = GetClientUserId(client);
+		RequestFrame(OnMustReplyToToggleCommand, id);
+	}
+	else
+	{
+		int id = GetClientUserId(client);
+		RequestFrame(OnMustReplyToToggleCommandFailure, id);
+	}
+	
+	return res;
+}
+
+void OnMustReplyToToggleCommand(int id)
+{
+	int client = GetClientOfUserId(id);
+	
+	if (client)
+	{
+		PrintToChat(client, "[SM] Building HUD hints are now %s",
+			g_enabledForClient[client] ? "ON" : "OFF");
+	}
+}
+
+void OnMustReplyToToggleCommandFailure(int id)
+{
+	int client = GetClientOfUserId(id);
+	
+	if (client)
+	{
+		PrintToChat(client, "[SM] Building HUD hints toggling was denied: cookies are not loaded yet");
+	}
+}
+
 void OnPluginToggled(ConVar cv, const char[] oldValue, const char[] newValue)
 {	
 	bool wasEnabled = !!StringToInt(oldValue);
@@ -267,7 +366,10 @@ void OnSeekRadiusChanged(ConVar cv, const char[] oldValue, const char[] newValue
 }
 
 Action OnVoicemenuUsed(int client, const char[] command, int argsCount)
-{	
+{
+	if (!g_enabledForClient[client])
+		return Plugin_Continue;
+	
 	if (GetGameTime() <= g_canSeekBuildingTime[client])
 		return Plugin_Continue;
 	
@@ -402,7 +504,7 @@ void ShowAnnotation(int client, int entity, const char caption[CAPTION_STRING_SI
  
 	event.SetFloat("worldPosX", pos[0]);
 	event.SetFloat("worldPosY", pos[1]);
-	event.SetFloat("worldPosZ", pos[2] + HINT_OFFSET_Z);
+	event.SetFloat("worldPosZ", pos[2] + ANNOTATION_OFFSET_Z);
 	
 	event.SetFloat("worldNormalX", 0.0);
 	event.SetFloat("worldNormalY", 0.0);
